@@ -55,6 +55,10 @@ app.get('/grades', requireGatewayAndJwt, (req, res) => {
 });
 
 app.put('/grades/:id', requireGatewayAndJwt, (req, res) => {
+  const user = req.user as any;
+  if (user.role !== 'dosen') {
+    return res.status(403).json({ error: 'ROLE_NOT_ALLOWED', reason: 'ROLE_NOT_ALLOWED' });
+  }
   const { score } = req.body as { score?: number };
   const gradeId = Number(req.params.id);
   if (!Number.isFinite(score) || score < 0 || score > 100) {
@@ -63,15 +67,71 @@ app.put('/grades/:id', requireGatewayAndJwt, (req, res) => {
 
   const grade = db.prepare('SELECT * FROM grades WHERE id = @id').get({ id: gradeId }) as any;
   if (!grade) return res.status(404).json({ error: 'RESOURCE_NOT_FOUND', reason: 'RESOURCE_NOT_FOUND' });
+  const classRow = db.prepare('SELECT lecturer_id, is_finalized FROM classes WHERE id = @classId').get({ classId: grade.class_id }) as { lecturer_id: number; is_finalized: number } | undefined;
+  if (!classRow || classRow.lecturer_id !== Number(user.sub)) {
+    return res.status(403).json({ error: 'CLASS_NOT_OWNED', reason: 'CLASS_NOT_OWNED' });
+  }
+  if (classRow.is_finalized === 1) {
+    return res.status(403).json({ error: 'CLASS_ALREADY_FINALIZED', reason: 'CLASS_ALREADY_FINALIZED' });
+  }
 
-  db.prepare('UPDATE grades SET score = @score, updated_at = @now, updated_by = @updatedBy WHERE id = @id').run({ score, now: new Date().toISOString(), updatedBy: Number((req.user as any).sub), id: gradeId });
+  db.prepare('UPDATE grades SET score = @score, updated_at = @now, updated_by = @updatedBy WHERE id = @id').run({ score, now: new Date().toISOString(), updatedBy: Number(user.sub), id: gradeId });
   return res.json({ success: true, id: gradeId, score });
 });
 
-app.post('/classes/:id/finalize', requireGatewayAndJwt, (req, res) => {
+app.post('/classes/:id/finalize', requireGatewayAndJwt, async (req, res) => {
   const classId = Number(req.params.id);
+  const user = req.user as any;
+  if (user.role !== 'dosen') {
+    return res.status(403).json({ error: 'ROLE_NOT_ALLOWED', reason: 'ROLE_NOT_ALLOWED' });
+  }
+  const classRow = db.prepare('SELECT lecturer_id, is_finalized FROM classes WHERE id = @id').get({ id: classId }) as { lecturer_id: number; is_finalized: number } | undefined;
+  if (!classRow) return res.status(404).json({ error: 'RESOURCE_NOT_FOUND', reason: 'RESOURCE_NOT_FOUND' });
+  if (classRow.lecturer_id !== Number(user.sub)) {
+    return res.status(403).json({ error: 'CLASS_NOT_OWNED', reason: 'CLASS_NOT_OWNED' });
+  }
+  if (classRow.is_finalized === 1) {
+    return res.status(403).json({ error: 'CLASS_ALREADY_FINALIZED', reason: 'CLASS_ALREADY_FINALIZED' });
+  }
+
+  const studentRows = db.prepare('SELECT student_id FROM enrollments WHERE class_id = @classId').all({ classId }) as { student_id: number }[];
+  let serviceToken: string;
+  try {
+    const tokenResponse = await fetch(new URL('/auth/service', config.gatewayUrl), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: config.serviceClientId, clientSecret: config.serviceClientSecret }),
+    });
+    if (!tokenResponse.ok) {
+      return res.status(502).json({ error: 'SERVICE_TOKEN_REQUEST_FAILED', reason: 'SERVICE_TOKEN_REQUEST_FAILED' });
+    }
+    const tokenBody = await tokenResponse.json() as { serviceToken?: string };
+    if (!tokenBody.serviceToken) {
+      return res.status(502).json({ error: 'SERVICE_TOKEN_REQUEST_FAILED', reason: 'SERVICE_TOKEN_REQUEST_FAILED' });
+    }
+    serviceToken = tokenBody.serviceToken;
+  } catch (error) {
+    console.error('Service Nilai could not obtain a transcript-sync token from the gateway:', error);
+    return res.status(502).json({ error: 'SERVICE_TOKEN_REQUEST_FAILED', reason: 'SERVICE_TOKEN_REQUEST_FAILED' });
+  }
+
   db.prepare('UPDATE classes SET is_finalized = 1, finalized_at = @now WHERE id = @id').run({ now: new Date().toISOString(), id: classId });
-  return res.json({ success: true });
+  try {
+    const syncResponse = await fetch(new URL('/transkrip/sinkron', config.gatewayUrl), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceToken}` },
+      body: JSON.stringify({ classId, studentIds: studentRows.map((row) => row.student_id) }),
+    });
+    if (!syncResponse.ok) {
+      db.prepare('UPDATE classes SET is_finalized = 0, finalized_at = NULL WHERE id = @id').run({ id: classId });
+      return res.status(502).json({ error: 'TRANSCRIPT_SYNC_FAILED', reason: 'TRANSCRIPT_SYNC_FAILED' });
+    }
+    return res.json({ success: true, finalized: true, syncStatus: syncResponse.status });
+  } catch (error) {
+    db.prepare('UPDATE classes SET is_finalized = 0, finalized_at = NULL WHERE id = @id').run({ id: classId });
+    console.error('Service Nilai could not synchronize transcripts through the gateway:', error);
+    return res.status(502).json({ error: 'TRANSCRIPT_SYNC_FAILED', reason: 'TRANSCRIPT_SYNC_FAILED' });
+  }
 });
 
 export default app;

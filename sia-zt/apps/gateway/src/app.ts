@@ -36,6 +36,50 @@ function cryptoRandom() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+async function forwardToService(req: any, res: any, url: string): Promise<number | null> {
+  try {
+    const headers: Record<string, string> = { 'X-Gateway-Secret': config.gatewaySecret };
+    const authorization = req.headers.authorization;
+    const deviceId = req.headers['x-device-id'];
+    if (typeof authorization === 'string') headers.Authorization = authorization;
+    if (typeof deviceId === 'string') headers['X-Device-ID'] = deviceId;
+
+    const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+    if (hasBody) headers['Content-Type'] = 'application/json';
+    const upstream = await fetch(url, {
+      method: req.method,
+      headers,
+      ...(hasBody ? { body: JSON.stringify(req.body) } : {}),
+    });
+    const contentType = upstream.headers.get('content-type');
+    if (contentType) res.set('Content-Type', contentType);
+    res.status(upstream.status).send(await upstream.text());
+    return upstream.status;
+  } catch (error) {
+    console.error(`Gateway could not reach service at ${url}:`, error);
+    res.status(502).json({ error: 'DOWNSTREAM_SERVICE_UNAVAILABLE', reason: 'DOWNSTREAM_SERVICE_UNAVAILABLE' });
+    return null;
+  }
+}
+
+function requireServiceToken(req: any, res: any, next: any) {
+  const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
+  if (!token) {
+    return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
+  }
+
+  try {
+    const payload = verifyJwt(token);
+    if (payload.role !== 'service' || payload.scope !== 'transcript-sync') {
+      return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
+    }
+    req.serviceToken = token;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
+  }
+}
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
@@ -150,7 +194,7 @@ app.post('/auth/logout', (req, res) => {
   return res.status(401).json({ error: 'REFRESH_TOKEN_REVOKED', reason: 'REFRESH_TOKEN_REVOKED' });
 });
 
-app.get('/nilai', requireAccessToken, requireDeviceHeader, (req, res) => {
+app.get('/nilai', requireAccessToken, requireDeviceHeader, async (req, res) => {
   const requestId = createRequestId();
   const user = req.user;
   const studentIdParam = req.query.studentId ? Number(req.query.studentId) : null;
@@ -160,20 +204,14 @@ app.get('/nilai', requireAccessToken, requireDeviceHeader, (req, res) => {
     return res.status(403).json({ error: decision.reason, reason: decision.reason });
   }
 
-  let rows;
-  if (user.role === 'mahasiswa') {
-    rows = db.prepare(`SELECT g.id, g.class_id, g.student_id, g.score, g.updated_at, c.course_code, c.course_name, c.lecturer_id FROM grades g JOIN classes c ON c.id = g.class_id WHERE g.student_id = @userId ORDER BY c.course_code`).all({ userId: user.id });
-  } else if (user.role === 'dosen') {
-    rows = db.prepare(`SELECT g.id, g.class_id, g.student_id, g.score, g.updated_at, c.course_code, c.course_name, u.full_name as student_name FROM grades g JOIN classes c ON c.id = g.class_id JOIN users u ON u.id = g.student_id WHERE c.lecturer_id = @userId ORDER BY c.course_name`).all({ userId: user.id });
-  } else {
-    rows = db.prepare(`SELECT g.id, g.class_id, g.student_id, g.score, g.updated_at, c.course_code, c.course_name, u.full_name as student_name FROM grades g JOIN classes c ON c.id = g.class_id JOIN users u ON u.id = g.student_id ORDER BY c.course_code`).all();
-  }
-
-  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'GET', endpoint: '/nilai', deviceId: req.deviceId, decision: 'ALLOW', reason: 'ALLOW', requestId });
-  return res.json(rows);
+  const serviceUrl = new URL('/grades', config.serviceNilaiUrl);
+  if (typeof req.query.studentId === 'string') serviceUrl.searchParams.set('studentId', req.query.studentId);
+  const status = await forwardToService(req, res, serviceUrl.toString());
+  const allowed = status !== null && status < 400;
+  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'GET', endpoint: '/nilai', deviceId: req.deviceId, decision: allowed ? 'ALLOW' : 'DENY', reason: allowed ? 'ALLOW' : 'DOWNSTREAM_SERVICE_ERROR', requestId });
 });
 
-app.put('/nilai/:id', requireAccessToken, requireDeviceHeader, (req, res) => {
+app.put('/nilai/:id', requireAccessToken, requireDeviceHeader, async (req, res) => {
   const requestId = createRequestId();
   const user = req.user;
   const gradeId = Number(req.params.id);
@@ -200,11 +238,9 @@ app.put('/nilai/:id', requireAccessToken, requireDeviceHeader, (req, res) => {
     return res.status(400).json({ error: 'VALIDATION_FAILED', reason: 'VALIDATION_FAILED' });
   }
 
-  const now = new Date().toISOString();
-  db.prepare('UPDATE grades SET score = @score, updated_at = @updated_at, updated_by = @updated_by WHERE id = @id').run({ score, updated_at: now, updated_by: user.id, id: gradeId });
-
-  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'PUT', endpoint: '/nilai/:id', deviceId: req.deviceId, decision: 'ALLOW', reason: 'ALLOW', requestId });
-  return res.json({ success: true, score });
+  const status = await forwardToService(req, res, new URL(`/grades/${gradeId}`, config.serviceNilaiUrl).toString());
+  const allowed = status !== null && status < 400;
+  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'PUT', endpoint: '/nilai/:id', deviceId: req.deviceId, decision: allowed ? 'ALLOW' : 'DENY', reason: allowed ? 'ALLOW' : 'DOWNSTREAM_SERVICE_ERROR', requestId });
 });
 
 app.post('/nilai/classes/:classId/finalize', requireAccessToken, requireDeviceHeader, async (req, res) => {
@@ -221,43 +257,12 @@ app.post('/nilai/classes/:classId/finalize', requireAccessToken, requireDeviceHe
     return res.status(403).json({ error: 'OUTSIDE_ACCESS_WINDOW', reason: 'OUTSIDE_ACCESS_WINDOW' });
   }
 
-  const classRow = db.prepare('SELECT * FROM classes WHERE id = @id').get({ id: classId }) as any;
-  if (!classRow) {
-    recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'POST', endpoint: '/nilai/classes/:classId/finalize', deviceId: req.deviceId, decision: 'DENY', reason: 'RESOURCE_NOT_FOUND', requestId });
-    return res.status(404).json({ error: 'RESOURCE_NOT_FOUND', reason: 'RESOURCE_NOT_FOUND' });
-  }
-
-  db.prepare('UPDATE classes SET is_finalized = 1, finalized_at = @now WHERE id = @id').run({ now: new Date().toISOString(), id: classId });
-
-  const studentRows = db.prepare('SELECT student_id FROM enrollments WHERE class_id = @classId').all({ classId }) as any[];
-  const serviceToken = signJwt({ sub: config.serviceClientId, role: 'service', scope: 'transcript-sync' }, '5m');
-
-  const syncPayload = {
-    classId,
-    studentIds: studentRows.map((row) => row.student_id),
-  };
-
-  let downstreamResponse: any = null;
-  try {
-    downstreamResponse = await fetch('http://localhost:3002/transcript/sync', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceToken}`,
-        'X-Gateway-Secret': config.gatewaySecret,
-      },
-      body: JSON.stringify(syncPayload),
-    });
-  } catch (error) {
-    recordAudit({ subjectType: 'service', subjectId: config.serviceClientId, role: 'service', method: 'POST', endpoint: '/nilai/classes/:classId/finalize', deviceId: req.deviceId, decision: 'DENY', reason: 'RESOURCE_NOT_FOUND', requestId });
-    return res.status(502).json({ error: 'DOWNSTREAM_SYNC_FAILED', reason: 'DOWNSTREAM_SYNC_FAILED' });
-  }
-
-  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'POST', endpoint: '/nilai/classes/:classId/finalize', deviceId: req.deviceId, decision: 'ALLOW', reason: 'ALLOW', requestId });
-  return res.json({ success: true, finalized: true, syncStatus: downstreamResponse.status });
+  const status = await forwardToService(req, res, new URL('/classes/' + classId + '/finalize', config.serviceNilaiUrl).toString());
+  const allowed = status !== null && status < 400;
+  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'POST', endpoint: '/nilai/classes/:classId/finalize', deviceId: req.deviceId, decision: allowed ? 'ALLOW' : 'DENY', reason: allowed ? 'ALLOW' : 'DOWNSTREAM_SERVICE_ERROR', requestId });
 });
 
-app.get('/transkrip', requireAccessToken, requireDeviceHeader, (req, res) => {
+app.get('/transkrip', requireAccessToken, requireDeviceHeader, async (req, res) => {
   const requestId = createRequestId();
   const user = req.user;
   const studentIdParam = req.query.studentId ? Number(req.query.studentId) : null;
@@ -267,11 +272,17 @@ app.get('/transkrip', requireAccessToken, requireDeviceHeader, (req, res) => {
     return res.status(403).json({ error: decision.reason, reason: decision.reason });
   }
 
-  const targetStudentId = user.role === 'mahasiswa' ? user.id : studentIdParam || user.id;
-  const rows = db.prepare(`SELECT t.id, t.student_id, t.class_id, t.score, t.synchronized_at, c.course_code, c.course_name, u.full_name as student_name FROM transcripts t JOIN classes c ON c.id = t.class_id JOIN users u ON u.id = t.student_id WHERE t.student_id = @studentId ORDER BY c.course_code`).all({ studentId: targetStudentId });
+  const serviceUrl = new URL('/transcripts', config.serviceTranskripUrl);
+  if (typeof req.query.studentId === 'string') serviceUrl.searchParams.set('studentId', req.query.studentId);
+  const status = await forwardToService(req, res, serviceUrl.toString());
+  const allowed = status !== null && status < 400;
+  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'GET', endpoint: '/transkrip', deviceId: req.deviceId, decision: allowed ? 'ALLOW' : 'DENY', reason: allowed ? 'ALLOW' : 'DOWNSTREAM_SERVICE_ERROR', requestId });
+});
 
-  recordAudit({ subjectType: 'user', subjectId: String(user.id), role: user.role, method: 'GET', endpoint: '/transkrip', deviceId: req.deviceId, decision: 'ALLOW', reason: 'ALLOW', requestId });
-  return res.json(rows);
+app.post('/transkrip/sinkron', requireServiceToken, async (req, res) => {
+  const status = await forwardToService(req, res, new URL('/transcript/sync', config.serviceTranskripUrl).toString());
+  const allowed = status !== null && status < 400;
+  recordAudit({ subjectType: 'service', subjectId: config.serviceClientId, role: 'service', method: 'POST', endpoint: '/transkrip/sinkron', decision: allowed ? 'ALLOW' : 'DENY', reason: allowed ? 'ALLOW' : 'DOWNSTREAM_SERVICE_ERROR', requestId: createRequestId() });
 });
 
 app.get('/admin/audit-logs', requireAccessToken, requireDeviceHeader, (req, res) => {

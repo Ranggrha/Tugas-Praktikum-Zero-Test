@@ -3,8 +3,13 @@ import { app } from '../apps/gateway/src/app';
 import { db } from '../database/db';
 import { signJwt } from '../packages/shared/src/helpers';
 import { config } from '../packages/shared/src/config';
+import { afterEach, vi } from 'vitest';
 
 describe('SIA-ZT security tests', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('1. valid login from registered device succeeds', async () => {
     const response = await request(app)
       .post('/auth/login')
@@ -290,5 +295,71 @@ describe('SIA-ZT security tests', () => {
       .send({ score: "1 OR 1=1" });
 
     expect(response.status).toBe(400);
+  });
+
+  it('26. gateway forwards authorized grade reads with the user token and gateway secret', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{ id: 1 }]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const token = signJwt({ sub: '4', role: 'mahasiswa' });
+
+    const response = await request(app)
+      .get('/nilai')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Device-ID', 'device-mhs-01');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([{ id: 1 }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL('/grades', config.serviceNilaiUrl).toString(),
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${token}`,
+          'X-Gateway-Secret': config.gatewaySecret,
+          'X-Device-ID': 'device-mhs-01',
+        }),
+      }),
+    );
+  });
+
+  it('27. gateway forwards authorized transcript reads to the transcript service', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([{ id: 1 }]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const token = signJwt({ sub: '4', role: 'mahasiswa' });
+
+    const response = await request(app)
+      .get('/transkrip')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Device-ID', 'device-mhs-01');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([{ id: 1 }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL('/transcripts', config.serviceTranskripUrl).toString(),
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${token}`,
+          'X-Gateway-Secret': config.gatewaySecret,
+        }),
+      }),
+    );
+  });
+
+  it('28. only a service token can invoke transcript synchronization through the gateway', async () => {
+    const token = signJwt({ sub: '4', role: 'mahasiswa' });
+    const response = await request(app)
+      .post('/transkrip/sinkron')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ classId: 1, studentIds: [4] });
+
+    expect(response.status).toBe(401);
+    expect(response.body.reason).toBe('INVALID_SERVICE_TOKEN');
   });
 });

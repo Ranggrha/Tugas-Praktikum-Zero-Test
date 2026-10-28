@@ -9,7 +9,7 @@ seedDatabase();
 export const app = express();
 app.use(express.json());
 
-function requireGatewayAndServiceJwt(req: any, res: any, next: any) {
+function requireGatewayAndJwt(req: any, res: any, next: any) {
   const providedSecret = req.headers['x-gateway-secret'];
   const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;
   if (!providedSecret || typeof providedSecret !== 'string' || !safeCompare(providedSecret, config.gatewaySecret)) {
@@ -21,13 +21,10 @@ function requireGatewayAndServiceJwt(req: any, res: any, next: any) {
 
   try {
     const payload = verifyJwt(token);
-    if (payload.role !== 'service') {
-      return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
-    }
     req.user = payload;
     next();
   } catch {
-    return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
+    return res.status(401).json({ error: 'INVALID_TOKEN', reason: 'INVALID_TOKEN' });
   }
 }
 
@@ -35,17 +32,32 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/transcripts', requireGatewayAndServiceJwt, (req, res) => {
+app.get('/transcripts', requireGatewayAndJwt, (req, res) => {
+  const user = req.user as any;
+  if (user.role !== 'admin' && user.role !== 'mahasiswa') {
+    return res.status(403).json({ error: 'ROLE_NOT_ALLOWED', reason: 'ROLE_NOT_ALLOWED' });
+  }
   const studentId = req.query.studentId ? Number(req.query.studentId) : null;
+  if (user.role === 'mahasiswa') {
+    if (studentId !== null && studentId !== Number(user.sub)) {
+      return res.status(403).json({ error: 'STUDENT_OWNERSHIP_MISMATCH', reason: 'STUDENT_OWNERSHIP_MISMATCH' });
+    }
+    const rows = db.prepare(`SELECT t.id, t.student_id, t.class_id, t.score, t.synchronized_at, c.course_code, c.course_name, u.full_name as student_name FROM transcripts t JOIN classes c ON c.id = t.class_id JOIN users u ON u.id = t.student_id WHERE t.student_id = @studentId ORDER BY c.course_code`).all({ studentId: Number(user.sub) });
+    return res.json(rows);
+  }
   if (studentId !== null) {
-    const rows = db.prepare(`SELECT t.*, c.course_code, c.course_name FROM transcripts t JOIN classes c ON c.id = t.class_id WHERE t.student_id = @studentId ORDER BY c.course_code`).all({ studentId });
+    const rows = db.prepare(`SELECT t.id, t.student_id, t.class_id, t.score, t.synchronized_at, c.course_code, c.course_name, u.full_name as student_name FROM transcripts t JOIN classes c ON c.id = t.class_id JOIN users u ON u.id = t.student_id WHERE t.student_id = @studentId ORDER BY c.course_code`).all({ studentId });
     return res.json(rows);
   }
   const rows = db.prepare(`SELECT t.*, c.course_code, c.course_name, u.full_name as student_name FROM transcripts t JOIN classes c ON c.id = t.class_id JOIN users u ON u.id = t.student_id ORDER BY c.course_code`).all();
   return res.json(rows);
 });
 
-app.post('/transcript/sync', requireGatewayAndServiceJwt, (req, res) => {
+app.post('/transcript/sync', requireGatewayAndJwt, (req, res) => {
+  const user = req.user as any;
+  if (user.role !== 'service' || user.scope !== 'transcript-sync') {
+    return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
+  }
   const body = req.body as { classId?: number; studentIds?: number[] };
   if (!body.classId || !Array.isArray(body.studentIds)) {
     return res.status(400).json({ error: 'VALIDATION_FAILED', reason: 'VALIDATION_FAILED' });

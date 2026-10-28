@@ -7,6 +7,8 @@ services:
     environment:
       NODE_ENV: development
       GATEWAY_PORT: 3000
+      SERVICE_NILAI_URL: http://service-nilai:3001
+      SERVICE_TRANSKRIP_URL: http://service-transkrip:3002
       DATABASE_PATH: /data/sia_zt.db
     ports:
       - '3000:3000'
@@ -19,6 +21,7 @@ services:
       dockerfile: ./docker/nilai.Dockerfile
     environment:
       NILAI_PORT: 3001
+      GATEWAY_URL: http://gateway:3000
       DATABASE_PATH: /data/sia_zt.db
     ports:
       - '3001:3001'
