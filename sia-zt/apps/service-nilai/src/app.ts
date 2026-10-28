@@ -37,7 +37,9 @@ app.get('/health', (_req, res) => {
 
 app.get('/grades', requireGatewayAndJwt, (req, res) => {
   const user = req.user as any;
-  const studentId = req.query.studentId ? Number(req.query.studentId) : null;
+  if (user.role !== 'mahasiswa' && user.role !== 'dosen') {
+    return res.status(403).json({ error: 'ROLE_NOT_ALLOWED', reason: 'ROLE_NOT_ALLOWED' });
+  }
   if (user.role === 'mahasiswa') {
     const rows = db.prepare(`SELECT g.*, c.course_code, c.course_name FROM grades g JOIN classes c ON c.id = g.class_id WHERE g.student_id = @studentId ORDER BY c.course_code`).all({ studentId: Number(user.sub) });
     return res.json(rows);
@@ -46,12 +48,7 @@ app.get('/grades', requireGatewayAndJwt, (req, res) => {
     const rows = db.prepare(`SELECT g.*, c.course_code, c.course_name, u.full_name as student_name FROM grades g JOIN classes c ON c.id = g.class_id JOIN users u ON u.id = g.student_id WHERE c.lecturer_id = @userId ORDER BY c.course_code`).all({ userId: Number(user.sub) });
     return res.json(rows);
   }
-  if (studentId !== null) {
-    const rows = db.prepare(`SELECT g.*, c.course_code, c.course_name FROM grades g JOIN classes c ON c.id = g.class_id WHERE g.student_id = @studentId ORDER BY c.course_code`).all({ studentId });
-    return res.json(rows);
-  }
-  const rows = db.prepare(`SELECT g.*, c.course_code, c.course_name, u.full_name as student_name FROM grades g JOIN classes c ON c.id = g.class_id JOIN users u ON u.id = g.student_id ORDER BY c.course_code`).all();
-  return res.json(rows);
+  return res.status(403).json({ error: 'ROLE_NOT_ALLOWED', reason: 'ROLE_NOT_ALLOWED' });
 });
 
 app.put('/grades/:id', requireGatewayAndJwt, (req, res) => {

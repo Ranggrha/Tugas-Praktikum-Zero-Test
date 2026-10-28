@@ -175,15 +175,16 @@ describe('SIA-ZT security tests', () => {
     expect(response.body.reason).toBe('OUTSIDE_ACCESS_WINDOW');
   });
 
-  it('15. admin can view any student transcript', async () => {
+  it('15. admin can view transcripts for all students', async () => {
     const token = signJwt({ sub: '1', role: 'admin' });
     const response = await request(app)
-      .get('/transkrip?studentId=4')
+      .get('/transkrip')
       .set('Authorization', `Bearer ${token}`)
       .set('X-Device-ID', 'device-admin-01');
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
+    expect([...new Set(response.body.map((row: { student_id: number }) => row.student_id))].sort()).toEqual([4, 5, 6]);
   });
 
   it('16. admin cannot modify grades by default', async () => {
@@ -194,6 +195,17 @@ describe('SIA-ZT security tests', () => {
       .set('Authorization', `Bearer ${token}`)
       .set('X-Device-ID', 'device-admin-01')
       .send({ score: 88 });
+
+    expect(response.status).toBe(403);
+    expect(response.body.reason).toBe('ROLE_NOT_ALLOWED');
+  });
+
+  it('16a. admin cannot read grades through the gateway', async () => {
+    const token = signJwt({ sub: '1', role: 'admin' });
+    const response = await request(app)
+      .get('/nilai')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Device-ID', 'device-admin-01');
 
     expect(response.status).toBe(403);
     expect(response.body.reason).toBe('ROLE_NOT_ALLOWED');
@@ -214,6 +226,17 @@ describe('SIA-ZT security tests', () => {
       .set('Authorization', 'Bearer invalid-token');
     expect(response.status).toBe(403);
     expect(response.body.reason).toBe('INVALID_GATEWAY_SECRET');
+  });
+
+  it('18a. admin cannot read grades by calling the grade service directly', async () => {
+    const token = signJwt({ sub: '1', role: 'admin' });
+    const response = await request('http://localhost:3001')
+      .get('/grades')
+      .set('X-Gateway-Secret', config.gatewaySecret)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.reason).toBe('ROLE_NOT_ALLOWED');
   });
 
   it('19. a user token cannot authorize transcript synchronization', async () => {

@@ -4,7 +4,6 @@ import type { UserRole } from '../../../packages/shared/src/types';
 export type Decision = { allowed: boolean; reason: string };
 
 export function authorizeGradeRead(user: { id: number; role: UserRole }, studentId?: number | null): Decision {
-  if (user.role === 'admin') return { allowed: true, reason: 'ALLOW' };
   if (user.role === 'mahasiswa') {
     if (studentId === null || studentId === undefined || Number(studentId) === user.id) {
       return { allowed: true, reason: 'ALLOW' };
