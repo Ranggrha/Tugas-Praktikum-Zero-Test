@@ -1,0 +1,25 @@
+{
+  "name": "sia-zt",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n gateway,service-nilai,service-transkrip,frontend -c cyan,green,magenta,yellow \"npm --workspace apps/gateway run dev\" \"npm --workspace apps/service-nilai run dev\" \"npm --workspace apps/service-transkrip run dev\" \"npm --workspace apps/frontend run dev -- --host 0.0.0.0\"",
+    "build": "npm --workspace apps/frontend run build",
+    "test": "vitest run",
+    "db:seed": "node --import tsx apps/gateway/src/db/seed.ts"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.2",
+    "@types/node": "^22.10.1",
+    "concurrently": "^9.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "supertest": "^7.0.0"
+  }
+}

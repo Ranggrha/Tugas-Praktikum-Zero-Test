@@ -1,0 +1,25 @@
+{
+  "name": "@sia-zt/service-nilai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --import tsx src/server.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.0.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8",
+    "supertest": "^7.0.0"
+  }
+}

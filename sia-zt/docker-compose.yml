@@ -1,0 +1,50 @@
+version: '3.9'
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: ./docker/gateway.Dockerfile
+    environment:
+      NODE_ENV: development
+      GATEWAY_PORT: 3000
+      DATABASE_PATH: /data/sia_zt.db
+    ports:
+      - '3000:3000'
+    volumes:
+      - db_data:/data
+
+  service-nilai:
+    build:
+      context: .
+      dockerfile: ./docker/nilai.Dockerfile
+    environment:
+      NILAI_PORT: 3001
+      DATABASE_PATH: /data/sia_zt.db
+    ports:
+      - '3001:3001'
+    volumes:
+      - db_data:/data
+
+  service-transkrip:
+    build:
+      context: .
+      dockerfile: ./docker/transkrip.Dockerfile
+    environment:
+      TRANSKRIP_PORT: 3002
+      DATABASE_PATH: /data/sia_zt.db
+    ports:
+      - '3002:3002'
+    volumes:
+      - db_data:/data
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./docker/frontend.Dockerfile
+    environment:
+      FRONTEND_PORT: 5173
+    ports:
+      - '5173:5173'
+
+volumes:
+  db_data:
