@@ -7,6 +7,10 @@ services:
     environment:
       NODE_ENV: development
       GATEWAY_PORT: 3000
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-demo-gateway-secret}
+      JWT_SECRET: ${JWT_SECRET:-demo-jwt-secret}
+      SERVICE_CLIENT_ID: ${SERVICE_CLIENT_ID:-grading-service}
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET:-demo-service-secret}
       SERVICE_NILAI_URL: http://service-nilai:3001
       SERVICE_TRANSKRIP_URL: http://service-transkrip:3002
       DATABASE_PATH: /data/sia_zt.db
@@ -21,6 +25,10 @@ services:
       dockerfile: ./docker/nilai.Dockerfile
     environment:
       NILAI_PORT: 3001
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-demo-gateway-secret}
+      JWT_SECRET: ${JWT_SECRET:-demo-jwt-secret}
+      SERVICE_CLIENT_ID: ${SERVICE_CLIENT_ID:-grading-service}
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET:-demo-service-secret}
       GATEWAY_URL: http://gateway:3000
       DATABASE_PATH: /data/sia_zt.db
     ports:
@@ -34,6 +42,9 @@ services:
       dockerfile: ./docker/transkrip.Dockerfile
     environment:
       TRANSKRIP_PORT: 3002
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-demo-gateway-secret}
+      JWT_SECRET: ${JWT_SECRET:-demo-jwt-secret}
+      SERVICE_CLIENT_ID: ${SERVICE_CLIENT_ID:-grading-service}
       DATABASE_PATH: /data/sia_zt.db
     ports:
       - '3002:3002'

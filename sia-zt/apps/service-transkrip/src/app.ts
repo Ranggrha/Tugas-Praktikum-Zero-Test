@@ -55,7 +55,7 @@ app.get('/transcripts', requireGatewayAndJwt, (req, res) => {
 
 app.post('/transcript/sync', requireGatewayAndJwt, (req, res) => {
   const user = req.user as any;
-  if (user.role !== 'service' || user.scope !== 'transcript-sync') {
+  if (user.sub !== config.serviceClientId || user.role !== 'service' || user.scope !== 'transcript-sync') {
     return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
   }
   const body = req.body as { classId?: number; studentIds?: number[] };

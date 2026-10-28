@@ -227,8 +227,8 @@ describe('SIA-ZT security tests', () => {
     expect(response.body.reason).toBe('INVALID_SERVICE_TOKEN');
   });
 
-  it('20. valid service token can synchronize finalized grades through the gateway', async () => {
-    const serviceToken = signJwt({ sub: config.serviceClientId, role: 'service', scope: 'transcript-sync' }, '5m');
+  it('20. finalization obtains a service token and synchronizes transcripts through the gateway', async () => {
+    process.env.TEST_NOW_ISO = '2025-01-01T10:00:00+07:00';
     const response = await request(app)
       .post('/nilai/classes/1/finalize')
       .set('Authorization', `Bearer ${signJwt({ sub: '2', role: 'dosen' })}`)
@@ -236,6 +236,11 @@ describe('SIA-ZT security tests', () => {
       .set('X-Gateway-Secret', config.gatewaySecret);
 
     expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ success: true, finalized: true, syncStatus: 200 });
+    expect(db.prepare('SELECT is_finalized FROM classes WHERE id = 1').get()).toEqual({ is_finalized: 1 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM audit_logs WHERE endpoint = '/auth/service' AND decision = 'ALLOW'").get()).toEqual({ count: 1 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM audit_logs WHERE endpoint = '/transkrip/sinkron' AND decision = 'ALLOW'").get()).toEqual({ count: 1 });
+    expect(db.prepare('SELECT COUNT(*) as count FROM transcripts WHERE class_id = 1').get()).toEqual({ count: 2 });
   });
 
   it('21. repeated transcript synchronization does not create duplicate records', async () => {
@@ -354,6 +359,17 @@ describe('SIA-ZT security tests', () => {
 
   it('28. only a service token can invoke transcript synchronization through the gateway', async () => {
     const token = signJwt({ sub: '4', role: 'mahasiswa' });
+    const response = await request(app)
+      .post('/transkrip/sinkron')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ classId: 1, studentIds: [4] });
+
+    expect(response.status).toBe(401);
+    expect(response.body.reason).toBe('INVALID_SERVICE_TOKEN');
+  });
+
+  it('29. a service token from another client cannot synchronize transcripts through the gateway', async () => {
+    const token = signJwt({ sub: 'other-service', role: 'service', scope: 'transcript-sync' }, '5m');
     const response = await request(app)
       .post('/transkrip/sinkron')
       .set('Authorization', `Bearer ${token}`)

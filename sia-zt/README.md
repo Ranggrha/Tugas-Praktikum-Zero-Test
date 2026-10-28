@@ -10,6 +10,7 @@ Sistem Informasi Akademik Zero Trust adalah aplikasi demo keamanan akademik yang
 - Service Transkrip Express di `apps/service-transkrip`
 - Database SQLite di `database/sia_zt.db`
 - Permintaan data akademik diperiksa dan diteruskan API Gateway ke service terkait; service memverifikasi gateway secret dan JWT.
+- Saat finalisasi, Service Nilai meminta token service dari `POST /auth/service`, lalu mengirim sinkronisasi transkrip melalui gateway. Nilai rahasia pada `.env` juga diteruskan ke seluruh service oleh Docker Compose.
 
 ## Prasyarat
 

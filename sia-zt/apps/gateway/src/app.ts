@@ -70,7 +70,7 @@ function requireServiceToken(req: any, res: any, next: any) {
 
   try {
     const payload = verifyJwt(token);
-    if (payload.role !== 'service' || payload.scope !== 'transcript-sync') {
+    if (payload.sub !== config.serviceClientId || payload.role !== 'service' || payload.scope !== 'transcript-sync') {
       return res.status(401).json({ error: 'INVALID_SERVICE_TOKEN', reason: 'INVALID_SERVICE_TOKEN' });
     }
     req.serviceToken = token;
