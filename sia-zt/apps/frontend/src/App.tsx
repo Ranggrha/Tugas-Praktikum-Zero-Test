@@ -1,6 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowDownRight,
+  ArrowRight,
+  BookOpen,
+  Check,
+  ChevronDown,
+  GraduationCap,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from 'lucide-react';
 
 type Role = 'admin' | 'dosen' | 'mahasiswa';
+type Page = 'overview' | 'grades' | 'transcripts';
 
 type User = {
   id: number;
@@ -32,6 +47,12 @@ type TranscriptRow = {
 
 const API_BASE = 'http://localhost:3000';
 
+const navigation: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'overview', label: 'Ringkasan', icon: LayoutDashboard },
+  { id: 'grades', label: 'Nilai', icon: BookOpen },
+  { id: 'transcripts', label: 'Transkrip', icon: GraduationCap },
+];
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState('mahasiswa01');
@@ -42,6 +63,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [token, setToken] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState<Page>('overview');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -73,6 +96,11 @@ function App() {
     return 'Mahasiswa';
   }, [user]);
 
+  const averageScore = useMemo(() => {
+    if (!grades.length) return 0;
+    return Math.round(grades.reduce((total, grade) => total + grade.score, 0) / grades.length);
+  }, [grades]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -86,9 +114,7 @@ function App() {
       });
 
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.reason || 'Login gagal');
-      }
+      if (!response.ok) throw new Error(data.reason || 'Login gagal');
 
       setUser(data.user);
       setToken(data.accessToken);
@@ -99,112 +125,205 @@ function App() {
     }
   };
 
+  const handleLogout = () => {
+    setUser(null);
+    setToken(null);
+    setGrades([]);
+    setTranscripts([]);
+    setActivePage('overview');
+    setMenuOpen(false);
+  };
+
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg border border-slate-200">
-          <div className="mb-6">
-            <p className="text-sm font-semibold text-sky-700">SIA-ZT</p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900">Portal Akademik Zero Trust</h1>
+      <main className="login-shell">
+        <div className="login-decoration login-decoration-one" />
+        <div className="login-decoration login-decoration-two" />
+        <section className="login-card">
+          <div className="brand-lockup">
+            <div className="brand-mark"><ShieldCheck size={25} strokeWidth={2.2} /></div>
+            <div>
+              <span className="brand-name">SIA<span>-ZT</span></span>
+              <span className="brand-caption">PORTAL AKADEMIK</span>
+            </div>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Username</label>
-              <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-600" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-600" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Device ID</label>
-              <input value={deviceId} onChange={(e) => setDeviceId(e.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-sky-600" />
-            </div>
-            {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-            <button disabled={loading} className="w-full rounded-lg bg-sky-700 px-4 py-2.5 font-medium text-white disabled:opacity-60">
-              {loading ? 'Masuk...' : 'Masuk'}
+
+          <div className="login-heading">
+            <span className="eyebrow"><Sparkles size={14} /> Akses aman, belajar nyaman</span>
+            <h1>Selamat datang<br />kembali<span>.</span></h1>
+            <p>Masuk ke ruang akademik digital Anda.</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="login-form">
+            <label>
+              <span>Username</span>
+              <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Masukkan username" required />
+            </label>
+            <label>
+              <span>Password</span>
+              <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan password" required />
+            </label>
+            <label>
+              <span>ID Perangkat</span>
+              <input value={deviceId} onChange={(e) => setDeviceId(e.target.value)} placeholder="ID perangkat Anda" required />
+            </label>
+            {error && <div className="error-message" role="alert">{error}</div>}
+            <button disabled={loading} className="primary-button login-button">
+              {loading ? 'Memverifikasi...' : 'Masuk ke portal'}
+              {!loading && <ArrowRight size={18} />}
             </button>
           </form>
-        </div>
-      </div>
+
+          <div className="login-security"><ShieldCheck size={16} /><span>Dilindungi verifikasi Zero Trust</span><span className="security-dot" /></div>
+        </section>
+        <footer className="login-footer">SIA-ZT <span>·</span> Sistem Informasi Akademik</footer>
+      </main>
     );
   }
 
+  const greetingName = user.fullName.trim().split(/\s+/)[0];
+  const dateLabel = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+  const title = activePage === 'overview' ? 'Ringkasan' : activePage === 'grades' ? 'Nilai Akademik' : 'Transkrip';
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <aside className="fixed left-0 top-0 h-full w-64 bg-slate-900 text-white">
-        <div className="p-6 border-b border-slate-700">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-300">SIA-ZT</p>
-          <h2 className="mt-2 text-xl font-semibold">{roleTitle}</h2>
+    <div className="app-shell">
+      {menuOpen && <button className="sidebar-backdrop" aria-label="Tutup menu" onClick={() => setMenuOpen(false)} />}
+      <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="brand-mark"><ShieldCheck size={23} strokeWidth={2.2} /></div>
+          <div><span className="brand-name">SIA<span>-ZT</span></span><span className="brand-caption">RUANG AKADEMIK</span></div>
+          <button className="icon-button sidebar-close" aria-label="Tutup menu" onClick={() => setMenuOpen(false)}><X size={20} /></button>
         </div>
-        <nav className="p-4 space-y-2 text-sm">
-          <div className="rounded-lg bg-slate-800 px-3 py-2">Beranda</div>
-          <div className="rounded-lg px-3 py-2 text-slate-300">Nilai</div>
-          <div className="rounded-lg px-3 py-2 text-slate-300">Transkrip</div>
+
+        <div className="workspace-label">MENU UTAMA</div>
+        <nav className="side-navigation" aria-label="Navigasi utama">
+          {navigation.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => { setActivePage(id); setMenuOpen(false); }} className={`nav-link ${activePage === id ? 'nav-link-active' : ''}`} aria-current={activePage === id ? 'page' : undefined}>
+              <Icon size={19} strokeWidth={1.9} /><span>{label}</span>{activePage === id && <span className="nav-indicator" />}
+            </button>
+          ))}
         </nav>
+
+        <div className="sidebar-spacer" />
+        <div className="security-card">
+          <div className="security-card-icon"><ShieldCheck size={19} /></div>
+          <div><strong>Perangkat terlindungi</strong><span>Zero Trust aktif</span></div>
+          <span className="security-dot" />
+        </div>
+        <button className="profile-button" onClick={handleLogout}>
+          <div className="avatar">{user.fullName.charAt(0).toUpperCase()}</div>
+          <div className="profile-info"><strong>{user.fullName}</strong><span>{roleTitle}</span></div>
+          <LogOut size={17} className="profile-logout" />
+        </button>
       </aside>
 
-      <main className="ml-64 p-6">
-        <header className="mb-6 flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-slate-200">
-          <div>
-            <p className="text-sm text-slate-500">Selamat datang</p>
-            <h1 className="text-2xl font-bold text-slate-900">{user.fullName}</h1>
+      <main className="main-content">
+        <header className="topbar">
+          <button className="icon-button menu-toggle" aria-label="Buka menu" onClick={() => setMenuOpen(true)}><Menu size={21} /></button>
+          <div className="breadcrumb"><span>Portal</span><span className="breadcrumb-slash">/</span><strong>{title}</strong></div>
+          <div className="topbar-right">
+            <div className="date-display">{dateLabel}</div>
+            <div className="topbar-avatar" title={user.fullName}>{user.fullName.charAt(0).toUpperCase()}</div>
+            <button className="mobile-logout" onClick={handleLogout} aria-label="Keluar"><LogOut size={18} /></button>
           </div>
-          <button onClick={() => setUser(null)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Keluar</button>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200">
-            <p className="text-sm text-slate-500">Peran</p>
-            <h3 className="mt-2 text-xl font-bold">{user.role}</h3>
-          </div>
-          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200">
-            <p className="text-sm text-slate-500">NIM</p>
-            <h3 className="mt-2 text-xl font-bold">{user.nim || '-'}</h3>
-          </div>
-          <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-200">
-            <p className="text-sm text-slate-500">Device aktif</p>
-            <h3 className="mt-2 text-xl font-bold">{deviceId}</h3>
-          </div>
-        </div>
+        <div className="page-content">
+          {error && <div className="inline-alert" role="alert">{error}<button onClick={() => setError('')} aria-label="Tutup pemberitahuan"><X size={16} /></button></div>}
 
-        <div className="mt-6 rounded-2xl bg-white p-5 shadow-sm border border-slate-200">
-          <h2 className="mb-4 text-lg font-semibold text-slate-900">Nilai</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="px-4 py-3">Mata Kuliah</th>
-                  <th className="px-4 py-3">Skor</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grades.length ? grades.map((g) => (
-                  <tr key={g.id} className="border-t border-slate-200">
-                    <td className="px-4 py-3">{g.course_code} - {g.course_name}</td>
-                    <td className="px-4 py-3 font-semibold">{g.score}</td>
-                    <td className="px-4 py-3"><span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">Tersedia</span></td>
-                  </tr>
-                )) : <tr><td colSpan={3} className="px-4 py-3 text-slate-500">Tidak ada data.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-2xl bg-white p-5 shadow-sm border border-slate-200">
-          <h2 className="mb-4 text-lg font-semibold text-slate-900">Transkrip</h2>
-          <div className="grid gap-3">
-            {transcripts.length ? transcripts.map((t) => (
-              <div key={t.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
-                <div>
-                  <p className="font-medium">{t.course_code} - {t.course_name}</p>
-                  <p className="text-sm text-slate-500">{t.student_name || 'Mahasiswa'}</p>
+          {activePage === 'overview' && (
+            <>
+              <section className="welcome-banner">
+                <div className="welcome-copy">
+                  <span className="welcome-kicker"><span className="welcome-dot" /> SEMESTER BERJALAN</span>
+                  <h1>Halo, {greetingName}<span>!</span></h1>
+                  <p>Semoga harimu produktif. Ini ringkasan aktivitas akademikmu.</p>
+                  <button className="welcome-link" onClick={() => setActivePage('grades')}>Lihat nilai akademik <ArrowRight size={16} /></button>
                 </div>
-                <span className="text-lg font-bold">{t.score}</span>
-              </div>
-            )) : <p className="text-slate-500">Belum ada transkrip.</p>}
-          </div>
+                <div className="welcome-art" aria-hidden="true">
+                  <div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" />
+                  <div className="art-icon"><GraduationCap size={58} strokeWidth={1.3} /></div>
+                  <div className="art-sparkle sparkle-one">✦</div><div className="art-sparkle sparkle-two">✧</div>
+                </div>
+                <div className="welcome-index">01 <span>/ 03</span></div>
+              </section>
+
+              <section className="stats-grid" aria-label="Statistik akademik">
+                <article className="stat-card">
+                  <div className="stat-top"><span className="stat-icon stat-icon-blue"><BookOpen size={19} /></span><span className="stat-note">Semester ini</span></div>
+                  <p className="stat-label">Mata kuliah</p><div className="stat-value">{grades.length}<span> mata kuliah</span></div>
+                  <div className="stat-progress"><span style={{ width: `${Math.min(grades.length * 12, 100)}%` }} /></div>
+                </article>
+                <article className="stat-card">
+                  <div className="stat-top"><span className="stat-icon stat-icon-green"><Check size={19} /></span><span className="stat-note positive-note"><ArrowDownRight size={14} /> Terkini</span></div>
+                  <p className="stat-label">Rata-rata nilai</p><div className="stat-value">{averageScore}<span> / 100</span></div>
+                  <div className="stat-progress progress-green"><span style={{ width: `${Math.min(averageScore, 100)}%` }} /></div>
+                </article>
+                <article className="stat-card">
+                  <div className="stat-top"><span className="stat-icon stat-icon-violet"><GraduationCap size={19} /></span><span className="stat-note">Akumulasi</span></div>
+                  <p className="stat-label">Data transkrip</p><div className="stat-value">{transcripts.length}<span> mata kuliah</span></div>
+                  <div className="stat-progress progress-violet"><span style={{ width: `${Math.min(transcripts.length * 12, 100)}%` }} /></div>
+                </article>
+              </section>
+
+              <section className="content-grid">
+                <article className="panel recent-panel">
+                  <div className="panel-heading">
+                    <div><span className="panel-kicker">PERFORMA</span><h2>Nilai terbaru</h2></div>
+                    <button className="text-link" onClick={() => setActivePage('grades')}>Lihat semua <ArrowRight size={15} /></button>
+                  </div>
+                  {grades.length ? (
+                    <div className="recent-list">
+                      {grades.slice(0, 4).map((grade, index) => (
+                        <div className="recent-row" key={grade.id}>
+                          <div className={`course-avatar course-avatar-${index % 3}`}><BookOpen size={17} /></div>
+                          <div className="course-details"><strong>{grade.course_name || 'Mata Kuliah'}</strong><span>{grade.course_code || 'Kode belum tersedia'}</span></div>
+                          <div className="grade-result"><strong>{grade.score}</strong><span>Nilai</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="empty-state"><div className="empty-icon"><BookOpen size={22} /></div><strong>Belum ada nilai</strong><span>Data nilai akan muncul di sini setelah tersedia.</span></div>}
+                </article>
+
+                <article className="panel access-panel">
+                  <div className="panel-heading"><div><span className="panel-kicker">AKUN ANDA</span><h2>Info perangkat</h2></div><div className="verified-tag"><ShieldCheck size={14} /> Terverifikasi</div></div>
+                  <div className="device-visual"><div className="device-ring"><ShieldCheck size={28} /></div><div><strong>Akses aman</strong><span>Perangkat Anda dikenali</span></div><span className="security-dot" /></div>
+                  <div className="device-details"><span>ID perangkat</span><strong>{deviceId}</strong></div>
+                  <div className="device-details"><span>Nomor induk</span><strong>{user.nim || '—'}</strong></div>
+                  <div className="access-footnote"><ShieldCheck size={15} /> Sesi Anda dilindungi kebijakan Zero Trust</div>
+                </article>
+              </section>
+            </>
+          )}
+
+          {activePage === 'grades' && (
+            <section className="panel data-panel">
+              <div className="panel-heading data-heading"><div><span className="panel-kicker">AKADEMIK</span><h2>Nilai akademik</h2><p>Ringkasan hasil belajar yang tercatat pada akun Anda.</p></div><div className="table-count">{grades.length} mata kuliah</div></div>
+              {grades.length ? (
+                <div className="table-wrap"><table className="academic-table"><thead><tr><th>MATA KULIAH</th><th>KODE</th><th>SKOR</th><th>STATUS</th></tr></thead><tbody>
+                  {grades.map((grade) => <tr key={grade.id}><td><strong>{grade.course_name || 'Mata Kuliah'}</strong></td><td>{grade.course_code || '—'}</td><td><span className="score-pill">{grade.score}</span></td><td><span className="status-pill"><span /> Tersedia</span></td></tr>)}
+                </tbody></table></div>
+              ) : <div className="empty-state large-empty"><div className="empty-icon"><BookOpen size={22} /></div><strong>Belum ada data nilai</strong><span>Nilai akademik akan ditampilkan di halaman ini.</span></div>}
+            </section>
+          )}
+
+          {activePage === 'transcripts' && (
+            <section className="panel data-panel">
+              <div className="panel-heading data-heading"><div><span className="panel-kicker">RIWAYAT AKADEMIK</span><h2>Transkrip nilai</h2><p>Riwayat nilai mata kuliah Anda.</p></div><div className="table-count">{transcripts.length} mata kuliah</div></div>
+              {transcripts.length ? (
+                <div className="transcript-list">{transcripts.map((transcript) => (
+                  <article className="transcript-row" key={transcript.id}>
+                    <div className="course-avatar course-avatar-violet"><GraduationCap size={18} /></div>
+                    <div className="course-details"><strong>{transcript.course_name || 'Mata Kuliah'}</strong><span>{transcript.course_code || 'Kode belum tersedia'}{transcript.student_name ? ` · ${transcript.student_name}` : ''}</span></div>
+                    <div className="transcript-score"><span>SKOR</span><strong>{transcript.score}</strong></div>
+                    <ChevronDown size={17} className="transcript-chevron" />
+                  </article>
+                ))}</div>
+              ) : <div className="empty-state large-empty"><div className="empty-icon"><GraduationCap size={22} /></div><strong>Transkrip belum tersedia</strong><span>Riwayat akademik akan ditampilkan di halaman ini.</span></div>}
+            </section>
+          )}
+
+          <footer className="page-footer"><span>© {new Date().getFullYear()} SIA-ZT</span><span className="footer-divider" /><span>Sistem Informasi Akademik</span><span className="footer-secure"><ShieldCheck size={14} /> Koneksi aman</span></footer>
         </div>
       </main>
     </div>
