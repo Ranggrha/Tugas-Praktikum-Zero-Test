@@ -1,8 +1,9 @@
 import request from 'supertest';
 import { app } from '../apps/gateway/src/app';
+import { app as nilaiServiceApp } from '../apps/service-nilai/src/app';
 import { db } from '../database/db';
+import { config, isWithinAccessWindow } from '../packages/shared/src/config';
 import { signJwt } from '../packages/shared/src/helpers';
-import { config } from '../packages/shared/src/config';
 import { afterEach, vi } from 'vitest';
 
 describe('SIA-ZT security tests', () => {
@@ -175,6 +176,39 @@ describe('SIA-ZT security tests', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.reason).toBe('OUTSIDE_ACCESS_WINDOW');
+  });
+
+  it('14a. grade service rejects direct grade changes and finalization outside the access window', async () => {
+    const token = signJwt({ sub: '2', role: 'dosen' });
+    process.env.TEST_NOW_ISO = '2025-01-01T06:59:00+07:00';
+    const updateResponse = await request(nilaiServiceApp)
+      .put('/grades/1')
+      .set('X-Gateway-Secret', config.gatewaySecret)
+      .set('Authorization', `******
+      .send({ score: 90 });
+
+    expect(updateResponse.status).toBe(403);
+    expect(updateResponse.body.reason).toBe('OUTSIDE_ACCESS_WINDOW');
+
+    process.env.TEST_NOW_ISO = '2025-01-01T21:01:00+07:00';
+    const finalizeResponse = await request(nilaiServiceApp)
+      .post('/classes/1/finalize')
+      .set('X-Gateway-Secret', config.gatewaySecret)
+      .set('Authorization', `******
+
+    expect(finalizeResponse.status).toBe(403);
+    expect(finalizeResponse.body.reason).toBe('OUTSIDE_ACCESS_WINDOW');
+  });
+
+  it('14b. access window includes both configured endpoints', () => {
+    process.env.TEST_NOW_ISO = '2025-01-01T07:00:00+07:00';
+    expect(isWithinAccessWindow()).toBe(true);
+
+    process.env.TEST_NOW_ISO = '2025-01-01T21:00:00+07:00';
+    expect(isWithinAccessWindow()).toBe(true);
+
+    process.env.TEST_NOW_ISO = '2025-01-01T21:01:00+07:00';
+    expect(isWithinAccessWindow()).toBe(false);
   });
 
   it('15. admin can view transcripts for all students', async () => {

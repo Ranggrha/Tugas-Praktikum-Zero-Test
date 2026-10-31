@@ -1,6 +1,6 @@
 import express from 'express';
 import { db, initializeDatabase, seedDatabase } from '../../../database/db';
-import { config } from '../../../packages/shared/src/config';
+import { config, isWithinAccessWindow } from '../../../packages/shared/src/config';
 import { verifyJwt, safeCompare } from '../../../packages/shared/src/helpers';
 
 initializeDatabase();
@@ -71,6 +71,9 @@ app.put('/grades/:id', requireGatewayAndJwt, (req, res) => {
   if (classRow.is_finalized === 1) {
     return res.status(403).json({ error: 'CLASS_ALREADY_FINALIZED', reason: 'CLASS_ALREADY_FINALIZED' });
   }
+  if (!isWithinAccessWindow()) {
+    return res.status(403).json({ error: 'OUTSIDE_ACCESS_WINDOW', reason: 'OUTSIDE_ACCESS_WINDOW' });
+  }
 
   db.prepare('UPDATE grades SET score = @score, updated_at = @now, updated_by = @updatedBy WHERE id = @id').run({ score, now: new Date().toISOString(), updatedBy: Number(user.sub), id: gradeId });
   return res.json({ success: true, id: gradeId, score });
@@ -89,6 +92,9 @@ app.post('/classes/:id/finalize', requireGatewayAndJwt, async (req, res) => {
   }
   if (classRow.is_finalized === 1) {
     return res.status(403).json({ error: 'CLASS_ALREADY_FINALIZED', reason: 'CLASS_ALREADY_FINALIZED' });
+  }
+  if (!isWithinAccessWindow()) {
+    return res.status(403).json({ error: 'OUTSIDE_ACCESS_WINDOW', reason: 'OUTSIDE_ACCESS_WINDOW' });
   }
 
   const studentRows = db.prepare('SELECT student_id FROM enrollments WHERE class_id = @classId').all({ classId }) as { student_id: number }[];

@@ -78,6 +78,7 @@ npm --workspace apps/frontend run dev -- --host 0.0.0.0
 | Admin | Melihat transkrip seluruh mahasiswa |
 
 Perubahan nilai dan finalisasi hanya dapat dilakukan dosen pemilik kelas, selama jendela akses dibuka dan nilai belum difinalisasi.
+Default jendela akses adalah pukul 07.00–21.00 WIB (termasuk batas awal dan akhir). Rentang dan zona waktu dapat diatur melalui `ACCESS_WINDOW_START`, `ACCESS_WINDOW_END`, dan `ACCESS_WINDOW_TZ` pada `.env`; perubahan konfigurasi berlaku setelah service dimulai ulang.
 
 ## Contoh request
 
