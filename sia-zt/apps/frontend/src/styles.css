@@ -94,6 +94,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(71, 117, 232
 .welcome-index { position: absolute; right: 25px; bottom: 20px; z-index: 2; color: #ffffffa6; font-family: Manrope, sans-serif; font-size: 11px; font-weight: 700; }
 .welcome-index span { color: #ffffff65; font-size: 9px; }
 .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 17px; margin-top: 19px; }
+.stats-grid.stats-grid-admin { grid-template-columns: minmax(0, 1fr); }
 .stat-card, .panel { border: 1px solid #e9edf4; border-radius: 14px; background: var(--surface); box-shadow: 0 3px 12px #25365706; }
 .stat-card { min-width: 0; padding: 17px 19px 16px; transition: transform .22s ease, box-shadow .22s ease; animation: card-enter .5s both; }
 .stat-card:nth-child(2) { animation-delay: .06s; }.stat-card:nth-child(3) { animation-delay: .12s; }
@@ -110,6 +111,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(71, 117, 232
 .stat-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7292f0, #4775e8); transition: width .8s cubic-bezier(.2,.8,.2,1); }
 .progress-green span { background: linear-gradient(90deg, #72d9ad, #26b17d); }.progress-violet span { background: linear-gradient(90deg, #b69af7, #8867db); }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .8fr); gap: 17px; margin-top: 19px; }
+.content-grid-admin { grid-template-columns: minmax(0, 1fr); }
 .panel { min-width: 0; padding: 21px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .panel-kicker { display: block; margin-bottom: 5px; color: #9ba6b7; font-size: 8px; font-weight: 700; letter-spacing: 1.3px; }

@@ -78,6 +78,7 @@ describe('SIA-ZT security tests', () => {
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.every((row: { student_id: number }) => row.student_id === 4)).toBe(true);
   });
 
   it('8. student cannot access another student grades', async () => {
@@ -110,6 +111,7 @@ describe('SIA-ZT security tests', () => {
       .set('X-Device-ID', 'device-dosen-01');
 
     expect(gradeListResponse.status).toBe(200);
+    expect([...new Set(gradeListResponse.body.map((row: { class_id: number }) => row.class_id))]).toEqual([1]);
 
     const gradeId = db.prepare('SELECT id FROM grades WHERE class_id = 1 AND student_id = 4').get()?.id as number;
     const updateResponse = await request(app)

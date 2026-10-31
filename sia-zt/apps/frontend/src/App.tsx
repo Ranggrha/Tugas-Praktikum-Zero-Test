@@ -47,11 +47,21 @@ type TranscriptRow = {
 
 const API_BASE = 'http://localhost:3000';
 
-const navigation: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'overview', label: 'Ringkasan', icon: LayoutDashboard },
-  { id: 'grades', label: 'Nilai', icon: BookOpen },
-  { id: 'transcripts', label: 'Transkrip', icon: GraduationCap },
-];
+const navigation: Record<Role, { id: Page; label: string; icon: typeof LayoutDashboard }[]> = {
+  admin: [
+    { id: 'overview', label: 'Ringkasan', icon: LayoutDashboard },
+    { id: 'transcripts', label: 'Transkrip', icon: GraduationCap },
+  ],
+  dosen: [
+    { id: 'overview', label: 'Ringkasan', icon: LayoutDashboard },
+    { id: 'grades', label: 'Nilai', icon: BookOpen },
+  ],
+  mahasiswa: [
+    { id: 'overview', label: 'Ringkasan', icon: LayoutDashboard },
+    { id: 'grades', label: 'Nilai', icon: BookOpen },
+    { id: 'transcripts', label: 'Transkrip', icon: GraduationCap },
+  ],
+};
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -72,16 +82,18 @@ function App() {
     const loadData = async () => {
       try {
         const [gradeRes, transcriptRes] = await Promise.all([
-          fetch(`${API_BASE}/nilai`, {
+          user.role === 'admin' ? Promise.resolve(null) : fetch(`${API_BASE}/nilai`, {
             headers: { Authorization: `Bearer ${token}`, 'X-Device-ID': deviceId },
           }),
-          fetch(`${API_BASE}/transkrip`, {
+          user.role === 'dosen' ? Promise.resolve(null) : fetch(`${API_BASE}/transkrip`, {
             headers: { Authorization: `Bearer ${token}`, 'X-Device-ID': deviceId },
           }),
         ]);
 
-        if (gradeRes.ok) setGrades(await gradeRes.json());
-        if (transcriptRes.ok) setTranscripts(await transcriptRes.json());
+        if (gradeRes && !gradeRes.ok) throw new Error('Gagal memuat data nilai.');
+        if (transcriptRes && !transcriptRes.ok) throw new Error('Gagal memuat data transkrip.');
+        if (gradeRes) setGrades(await gradeRes.json());
+        if (transcriptRes) setTranscripts(await transcriptRes.json());
       } catch {
         setError('Gagal memuat data akademik.');
       }
@@ -197,7 +209,7 @@ function App() {
 
         <div className="workspace-label">MENU UTAMA</div>
         <nav className="side-navigation" aria-label="Navigasi utama">
-          {navigation.map(({ id, label, icon: Icon }) => (
+          {navigation[user.role].map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => { setActivePage(id); setMenuOpen(false); }} className={`nav-link ${activePage === id ? 'nav-link-active' : ''}`} aria-current={activePage === id ? 'page' : undefined}>
               <Icon size={19} strokeWidth={1.9} /><span>{label}</span>{activePage === id && <span className="nav-indicator" />}
             </button>
@@ -238,7 +250,9 @@ function App() {
                   <span className="welcome-kicker"><span className="welcome-dot" /> SEMESTER BERJALAN</span>
                   <h1>Halo, {greetingName}<span>!</span></h1>
                   <p>Semoga harimu produktif. Ini ringkasan aktivitas akademikmu.</p>
-                  <button className="welcome-link" onClick={() => setActivePage('grades')}>Lihat nilai akademik <ArrowRight size={16} /></button>
+                  <button className="welcome-link" onClick={() => setActivePage(user.role === 'admin' ? 'transcripts' : 'grades')}>
+                    {user.role === 'admin' ? 'Lihat semua transkrip' : 'Lihat nilai akademik'} <ArrowRight size={16} />
+                  </button>
                 </div>
                 <div className="welcome-art" aria-hidden="true">
                   <div className="art-orbit orbit-one" /><div className="art-orbit orbit-two" />
@@ -248,26 +262,30 @@ function App() {
                 <div className="welcome-index">01 <span>/ 03</span></div>
               </section>
 
-              <section className="stats-grid" aria-label="Statistik akademik">
-                <article className="stat-card">
-                  <div className="stat-top"><span className="stat-icon stat-icon-blue"><BookOpen size={19} /></span><span className="stat-note">Semester ini</span></div>
-                  <p className="stat-label">Mata kuliah</p><div className="stat-value">{grades.length}<span> mata kuliah</span></div>
-                  <div className="stat-progress"><span style={{ width: `${Math.min(grades.length * 12, 100)}%` }} /></div>
-                </article>
-                <article className="stat-card">
-                  <div className="stat-top"><span className="stat-icon stat-icon-green"><Check size={19} /></span><span className="stat-note positive-note"><ArrowDownRight size={14} /> Terkini</span></div>
-                  <p className="stat-label">Rata-rata nilai</p><div className="stat-value">{averageScore}<span> / 100</span></div>
-                  <div className="stat-progress progress-green"><span style={{ width: `${Math.min(averageScore, 100)}%` }} /></div>
-                </article>
+              <section className={`stats-grid ${user.role === 'admin' ? 'stats-grid-admin' : ''}`} aria-label="Statistik akademik">
+                {user.role !== 'admin' && (
+                  <>
+                    <article className="stat-card">
+                      <div className="stat-top"><span className="stat-icon stat-icon-blue"><BookOpen size={19} /></span><span className="stat-note">Semester ini</span></div>
+                      <p className="stat-label">Mata kuliah</p><div className="stat-value">{grades.length}<span> mata kuliah</span></div>
+                      <div className="stat-progress"><span style={{ width: `${Math.min(grades.length * 12, 100)}%` }} /></div>
+                    </article>
+                    <article className="stat-card">
+                      <div className="stat-top"><span className="stat-icon stat-icon-green"><Check size={19} /></span><span className="stat-note positive-note"><ArrowDownRight size={14} /> Terkini</span></div>
+                      <p className="stat-label">Rata-rata nilai</p><div className="stat-value">{averageScore}<span> / 100</span></div>
+                      <div className="stat-progress progress-green"><span style={{ width: `${Math.min(averageScore, 100)}%` }} /></div>
+                    </article>
+                  </>
+                )}
                 <article className="stat-card">
                   <div className="stat-top"><span className="stat-icon stat-icon-violet"><GraduationCap size={19} /></span><span className="stat-note">Akumulasi</span></div>
-                  <p className="stat-label">Data transkrip</p><div className="stat-value">{transcripts.length}<span> mata kuliah</span></div>
+                  <p className="stat-label">{user.role === 'admin' ? 'Transkrip seluruh mahasiswa' : 'Data transkrip'}</p><div className="stat-value">{transcripts.length}<span> mata kuliah</span></div>
                   <div className="stat-progress progress-violet"><span style={{ width: `${Math.min(transcripts.length * 12, 100)}%` }} /></div>
                 </article>
               </section>
 
-              <section className="content-grid">
-                <article className="panel recent-panel">
+              <section className={`content-grid ${user.role === 'admin' ? 'content-grid-admin' : ''}`}>
+                {user.role !== 'admin' && <article className="panel recent-panel">
                   <div className="panel-heading">
                     <div><span className="panel-kicker">PERFORMA</span><h2>Nilai terbaru</h2></div>
                     <button className="text-link" onClick={() => setActivePage('grades')}>Lihat semua <ArrowRight size={15} /></button>
@@ -283,7 +301,7 @@ function App() {
                       ))}
                     </div>
                   ) : <div className="empty-state"><div className="empty-icon"><BookOpen size={22} /></div><strong>Belum ada nilai</strong><span>Data nilai akan muncul di sini setelah tersedia.</span></div>}
-                </article>
+                </article>}
 
                 <article className="panel access-panel">
                   <div className="panel-heading"><div><span className="panel-kicker">AKUN ANDA</span><h2>Info perangkat</h2></div><div className="verified-tag"><ShieldCheck size={14} /> Terverifikasi</div></div>
@@ -309,7 +327,7 @@ function App() {
 
           {activePage === 'transcripts' && (
             <section className="panel data-panel">
-              <div className="panel-heading data-heading"><div><span className="panel-kicker">RIWAYAT AKADEMIK</span><h2>Transkrip nilai</h2><p>Riwayat nilai mata kuliah Anda.</p></div><div className="table-count">{transcripts.length} mata kuliah</div></div>
+              <div className="panel-heading data-heading"><div><span className="panel-kicker">RIWAYAT AKADEMIK</span><h2>Transkrip nilai</h2><p>{user.role === 'admin' ? 'Transkrip seluruh mahasiswa.' : 'Riwayat nilai mata kuliah Anda.'}</p></div><div className="table-count">{transcripts.length} mata kuliah</div></div>
               {transcripts.length ? (
                 <div className="transcript-list">{transcripts.map((transcript) => (
                   <article className="transcript-row" key={transcript.id}>

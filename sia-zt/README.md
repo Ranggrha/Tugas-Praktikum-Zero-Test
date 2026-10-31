@@ -69,6 +69,16 @@ npm --workspace apps/frontend run dev -- --host 0.0.0.0
 - Service Transkrip: http://localhost:3002
 - Frontend: http://localhost:5173
 
+## Matriks akses role
+
+| Role | Hak akses |
+| --- | --- |
+| Mahasiswa | Melihat nilai dan transkrip miliknya sendiri |
+| Dosen | Melihat, mengubah, dan memfinalisasi nilai pada kelas yang diajarnya |
+| Admin | Melihat transkrip seluruh mahasiswa |
+
+Perubahan nilai dan finalisasi hanya dapat dilakukan dosen pemilik kelas, selama jendela akses dibuka dan nilai belum difinalisasi.
+
 ## Contoh request
 
 ```bash
