@@ -163,6 +163,16 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(71, 117, 232
 .score-pill { display: inline-grid; min-width: 35px; height: 27px; place-items: center; border-radius: 8px; color: #486bc9; background: #eff3ff; font-family: Manrope, sans-serif; font-size: 11px; font-weight: 800; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; color: #369772; font-size: 9px; }
 .status-pill span { width: 6px; height: 6px; border-radius: 50%; background: #44c595; }
+.status-pill-finalized { color: #8390a4; }
+.status-pill-finalized span { background: #aab3c1; }
+.grade-edit-form { display: flex; align-items: center; gap: 6px; }
+.grade-edit-form input { width: 74px; height: 30px; padding: 5px 7px; border: 1px solid #dfe5ef; border-radius: 7px; color: #34425c; font: inherit; }
+.grade-action-button { padding: 7px 9px; border: 1px solid #e1e6ef; border-radius: 7px; color: #64728a; background: #fff; font-size: 9px; font-weight: 600; }
+.grade-action-button:hover:not(:disabled) { border-color: #9aafe8; color: #4567bd; background: #f7f9ff; }
+.grade-action-button:disabled { cursor: wait; opacity: .65; }
+.grade-save-button { border-color: #5276de; color: #fff; background: #5276de; }
+.grade-save-button:hover:not(:disabled) { border-color: #405fbd; color: #fff; background: #405fbd; }
+.grade-locked { color: #929db0; font-size: 9px; }
 .large-empty { min-height: 240px; }
 .transcript-list { border-top: 1px solid #edf0f5; }
 .transcript-row { display: flex; align-items: center; gap: 13px; padding: 14px 8px; border-bottom: 1px solid #f0f2f6; transition: background .2s; }

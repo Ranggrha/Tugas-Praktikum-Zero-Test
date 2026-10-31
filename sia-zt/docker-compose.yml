@@ -18,6 +18,7 @@ services:
       - '3000:3000'
     volumes:
       - db_data:/data
+      - ./config/access-window.json:/app/config/access-window.json:ro
 
   service-nilai:
     build:
@@ -35,6 +36,7 @@ services:
       - '3001:3001'
     volumes:
       - db_data:/data
+      - ./config/access-window.json:/app/config/access-window.json:ro
 
   service-transkrip:
     build:

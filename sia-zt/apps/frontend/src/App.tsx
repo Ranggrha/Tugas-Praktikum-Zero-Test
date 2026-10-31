@@ -30,6 +30,7 @@ type GradeRow = {
   class_id: number;
   student_id: number;
   score: number;
+  is_finalized?: number;
   course_code?: string;
   course_name?: string;
   student_name?: string;
@@ -70,6 +71,9 @@ function App() {
   const [deviceId, setDeviceId] = useState('device-mhs-01');
   const [grades, setGrades] = useState<GradeRow[]>([]);
   const [transcripts, setTranscripts] = useState<TranscriptRow[]>([]);
+  const [editingGradeId, setEditingGradeId] = useState<number | null>(null);
+  const [editedScore, setEditedScore] = useState('');
+  const [savingGradeId, setSavingGradeId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [token, setToken] = useState<string | null>(null);
@@ -83,7 +87,7 @@ function App() {
       try {
         const [gradeRes, transcriptRes] = await Promise.all([
           user.role === 'admin' ? Promise.resolve(null) : fetch(`${API_BASE}/nilai`, {
-            headers: { Authorization: `Bearer ${token}`, 'X-Device-ID': deviceId },
+            headers: { Authorization: ['Bearer', token].join(' '), 'X-Device-ID': deviceId },
           }),
           user.role === 'dosen' ? Promise.resolve(null) : fetch(`${API_BASE}/transkrip`, {
             headers: { Authorization: `Bearer ${token}`, 'X-Device-ID': deviceId },
@@ -112,6 +116,50 @@ function App() {
     if (!grades.length) return 0;
     return Math.round(grades.reduce((total, grade) => total + grade.score, 0) / grades.length);
   }, [grades]);
+
+  const handleGradeSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || editingGradeId === null) return;
+
+    const score = Number(editedScore);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      setError('Nilai harus berupa angka antara 0 sampai 100.');
+      return;
+    }
+
+    setSavingGradeId(editingGradeId);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/nilai/${editingGradeId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: ['Bearer', token].join(' '),
+          'X-Device-ID': deviceId,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ score }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          OUTSIDE_ACCESS_WINDOW: 'Pengubahan nilai hanya diizinkan pukul 07.00–21.00 WIB.',
+          CLASS_ALREADY_FINALIZED: 'Nilai kelas ini sudah difinalisasi dan tidak dapat diubah.',
+          CLASS_NOT_OWNED: 'Anda hanya dapat mengubah nilai pada kelas yang Anda ajar.',
+        };
+        throw new Error(messages[data.reason] || data.reason || 'Gagal menyimpan perubahan nilai.');
+      }
+
+      setGrades((current) => current.map((grade) => (
+        grade.id === editingGradeId ? { ...grade, score: data.score } : grade
+      )));
+      setEditingGradeId(null);
+      setEditedScore('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan perubahan nilai.');
+    } finally {
+      setSavingGradeId(null);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +190,9 @@ function App() {
     setToken(null);
     setGrades([]);
     setTranscripts([]);
+    setEditingGradeId(null);
+    setEditedScore('');
+    setSavingGradeId(null);
     setActivePage('overview');
     setMenuOpen(false);
   };
@@ -316,10 +367,44 @@ function App() {
 
           {activePage === 'grades' && (
             <section className="panel data-panel">
-              <div className="panel-heading data-heading"><div><span className="panel-kicker">AKADEMIK</span><h2>Nilai akademik</h2><p>Ringkasan hasil belajar yang tercatat pada akun Anda.</p></div><div className="table-count">{grades.length} mata kuliah</div></div>
+              <div className="panel-heading data-heading"><div><span className="panel-kicker">AKADEMIK</span><h2>Nilai akademik</h2><p>{user.role === 'dosen' ? 'Nilai mahasiswa pada kelas yang Anda ajar. Perubahan tersedia pukul 07.00–21.00 WIB.' : 'Ringkasan hasil belajar yang tercatat pada akun Anda.'}</p></div><div className="table-count">{grades.length} mata kuliah</div></div>
               {grades.length ? (
-                <div className="table-wrap"><table className="academic-table"><thead><tr><th>MATA KULIAH</th><th>KODE</th><th>SKOR</th><th>STATUS</th></tr></thead><tbody>
-                  {grades.map((grade) => <tr key={grade.id}><td><strong>{grade.course_name || 'Mata Kuliah'}</strong></td><td>{grade.course_code || '—'}</td><td><span className="score-pill">{grade.score}</span></td><td><span className="status-pill"><span /> Tersedia</span></td></tr>)}
+                <div className="table-wrap"><table className="academic-table"><thead><tr>{user.role === 'dosen' && <th>MAHASISWA</th>}<th>MATA KULIAH</th><th>KODE</th><th>SKOR</th><th>STATUS</th>{user.role === 'dosen' && <th>AKSI</th>}</tr></thead><tbody>
+                  {grades.map((grade) => <tr key={grade.id}>
+                    {user.role === 'dosen' && <td><strong>{grade.student_name || `Mahasiswa #${grade.student_id}`}</strong></td>}
+                    <td><strong>{grade.course_name || 'Mata Kuliah'}</strong></td>
+                    <td>{grade.course_code || '—'}</td>
+                    <td>
+                      {user.role === 'dosen' && editingGradeId === grade.id ? (
+                        <form className="grade-edit-form" onSubmit={handleGradeSave}>
+                          <input
+                            aria-label={`Nilai ${grade.student_name || grade.student_id} - ${grade.course_name || grade.course_code}`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={editedScore}
+                            onChange={(event) => setEditedScore(event.target.value)}
+                            required
+                          />
+                          <button className="grade-action-button grade-save-button" type="submit" disabled={savingGradeId === grade.id}>
+                            {savingGradeId === grade.id ? 'Menyimpan...' : 'Simpan'}
+                          </button>
+                          <button className="grade-action-button" type="button" disabled={savingGradeId === grade.id} onClick={() => { setEditingGradeId(null); setEditedScore(''); }}>
+                            Batal
+                          </button>
+                        </form>
+                      ) : <span className="score-pill">{grade.score}</span>}
+                    </td>
+                    <td><span className={`status-pill ${grade.is_finalized === 1 ? 'status-pill-finalized' : ''}`}><span /> {grade.is_finalized === 1 ? 'Difinalisasi' : 'Tersedia'}</span></td>
+                    {user.role === 'dosen' && <td>
+                      {grade.is_finalized === 1 ? <span className="grade-locked">Terkunci</span> : editingGradeId === grade.id ? null : (
+                        <button className="grade-action-button grade-edit-button" type="button" onClick={() => { setEditingGradeId(grade.id); setEditedScore(String(grade.score)); setError(''); }}>
+                          Ubah nilai
+                        </button>
+                      )}
+                    </td>}
+                  </tr>)}
                 </tbody></table></div>
               ) : <div className="empty-state large-empty"><div className="empty-icon"><BookOpen size={22} /></div><strong>Belum ada data nilai</strong><span>Nilai akademik akan ditampilkan di halaman ini.</span></div>}
             </section>
