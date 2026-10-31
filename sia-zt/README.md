@@ -1,6 +1,4 @@
-# SIA-ZT
-
-Sistem Informasi Akademik Zero Trust adalah aplikasi demo keamanan akademik yang mengimplementasikan autentikasi, otorisasi, policy enforcement, audit log, dan sinkronisasi transkrip antar layanan.
+# RANGGA NUGRAHA_247006111036_B
 
 ## Arsitektur
 
@@ -21,7 +19,7 @@ Sistem Informasi Akademik Zero Trust adalah aplikasi demo keamanan akademik yang
 
 Salin `.env.example` menjadi `.env` lalu sesuaikan nilai secret.
 
-Contoh akun demo:
+Akun demo:
 
 - admin01 / admin123
 - dosen01 / dosen123
@@ -69,47 +67,10 @@ npm --workspace apps/frontend run dev -- --host 0.0.0.0
 - Service Transkrip: http://localhost:3002
 - Frontend: http://localhost:5173
 
-## Matriks akses role
+## Konfigurasi Jam Ubah Nilai
 
-| Role | Hak akses |
-| --- | --- |
-| Mahasiswa | Melihat nilai dan transkrip miliknya sendiri |
-| Dosen | Melihat, mengubah, dan memfinalisasi nilai pada kelas yang diajarnya |
-| Admin | Melihat transkrip seluruh mahasiswa |
+Atur jadwal perubahan dan finalisasi nilai pada [`config/access-window.json`](./config/access-window.json). Ubah `start` dan `end` dengan format 24 jam `HH:mm`, serta `timeZone` 
 
-Perubahan nilai dan finalisasi hanya dapat dilakukan dosen pemilik kelas, selama jendela akses dibuka dan nilai belum difinalisasi.
-Atur jadwal perubahan dan finalisasi nilai pada [`config/access-window.json`](./config/access-window.json). Ubah `start` dan `end` dengan format 24 jam `HH:mm`, serta `timeZone` dengan nama zona waktu IANA (default `Asia/Jakarta`). Batas awal dan akhir termasuk waktu yang diizinkan. Konfigurasi dibaca setiap kali ada permintaan sehingga perubahan berlaku tanpa memulai ulang service. Jika konfigurasi tidak valid, aplikasi menolak perubahan nilai sampai berkas diperbaiki.
-
-## Contoh request
-
-```bash
-curl -X POST http://localhost:3000/auth/login \
-  -H 'Content-Type: application/json' \
-  -H 'X-Device-ID: device-mhs-01' \
-  -d '{"username":"mahasiswa01","password":"mahasiswa123"}'
-```
-
-```bash
-curl http://localhost:3000/nilai \
-  -H 'Authorization: Bearer <access-token>' \
-  -H 'X-Device-ID: device-mhs-01'
-```
-
-```bash
-curl http://localhost:3000/transkrip?studentId=4 \
-  -H 'Authorization: Bearer <access-token>' \
-  -H 'X-Device-ID: device-admin-01'
-```
-
-## Sinkronisasi transkrip
-
-```bash
-curl -X POST http://localhost:3000/auth/service \
-  -H 'Content-Type: application/json' \
-  -d '{"clientId":"grading-service","clientSecret":"replace-service-secret"}'
-```
-
-Lalu gunakan token hasil dari endpoint tersebut untuk memanggil service transkrip secara resmi melalui gateway saat finalisasi kelas.
 
 ## Testing
 
