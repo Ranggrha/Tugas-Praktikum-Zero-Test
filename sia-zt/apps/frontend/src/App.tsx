@@ -244,7 +244,8 @@ function App() {
     );
   }
 
-  const greetingName = user.fullName.trim().split(/\s+/)[0];
+  const nameWithoutTitle = user.fullName.trim().replace(/^(?:(?:Dr|Prof|Ir)\.?\s+)+/i, '');
+  const greetingName = nameWithoutTitle.split(/\s+/)[0] || user.username;
   const dateLabel = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
   const title = activePage === 'overview' ? 'Ringkasan' : activePage === 'grades' ? 'Nilai Akademik' : 'Transkrip';
 
